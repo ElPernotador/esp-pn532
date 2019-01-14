@@ -11,6 +11,7 @@
  v 1.0		Basic port of the v 2.1 of the Adafruit PN532 Driver
  */
 /**************************************************************************/
+#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 
 #include <PN532.h>
 #include <stdio.h>
@@ -40,10 +41,10 @@ uint8_t _inListedTag;  // Tg number of inlisted tag.
 #define ESP_INTR_FLAG_DEFAULT 0
 static xQueueHandle IRQQueue = NULL;
 // Uncomment these lines to enable debug output for PN532(SPI) and/or MIFARE related code
-#define PN532DEBUG
-// #define MIFAREDEBUG
-// #define IRQDEBUG
-#define ENABLE_IRQ_ISR
+//#define PN532DEBUG
+//#define MIFAREDEBUG
+//#define IRQDEBUG
+//#define ENABLE_IRQ_ISR
 
 #define PN532_PACKBUFFSIZ 64
 uint8_t pn532_packetbuffer[PN532_PACKBUFFSIZ];
@@ -686,7 +687,7 @@ bool readPassiveTargetID (uint8_t cardbaudrate, uint8_t * uid, uint8_t * uidLeng
 	 b13..NFCIDLen   NFCID                                      */
 
 #ifdef MIFAREDEBUG
-	ESP_LOGD(TAG,"Found %d tags",pn532_packetbuffer[7]));
+    ESP_LOGD(TAG,"Found %d tags",pn532_packetbuffer[7]);
 #endif
 	if (pn532_packetbuffer[7] != 1) return 0;
 
@@ -694,14 +695,14 @@ bool readPassiveTargetID (uint8_t cardbaudrate, uint8_t * uid, uint8_t * uidLeng
 	sens_res <<= 8;
 	sens_res |= pn532_packetbuffer[10];
 #ifdef MIFAREDEBUG
-	ESP_LOGD(TAG,"ATQA: 0x%.2X",sensr_res);
-	ESP_LOGD(TAG,"SAK: 0x%.2X",pn532_packetbuffer[11]));
+    ESP_LOGD(TAG,"ATQA: 0x%.2X",sens_res);
+    ESP_LOGD(TAG,"SAK: 0x%.2X",pn532_packetbuffer[11]);
 #endif
 
 	/* Card appears to be Mifare Classic */
 	*uidLength = pn532_packetbuffer[12];
 #ifdef MIFAREDEBUG
-	printf("[%s] UID:");
+    //	printf("[%s] UID:", );
 #endif
 	for (uint8_t i = 0; i < pn532_packetbuffer[12]; i++)
 	{
@@ -949,7 +950,7 @@ uint8_t mifareclassic_AuthenticateBlock (uint8_t * uid, uint8_t uidLen, uint32_t
 	ESP_LOGD(TAG,"Trying to authenticate card ");
 	esp_log_buffer_hex(TAG,_uid,_uidLen);
 	ESP_LOGD(TAG,"Using authentication KEY %c :",keyNumber ? 'B' : 'A');
-	esp_log_buffer_hex(TAG,key,6);
+	esp_log_buffer_hex(TAG,_key,6);
 #endif
 
 	// Prepare the authentication command //
