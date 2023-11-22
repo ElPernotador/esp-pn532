@@ -1,15 +1,12 @@
-set(COMPONENT_SRCS
-        PN532.c
-        nfc_console.c
-        )
-set(COMPONENT_ADD_INCLUDEDIRS "include")
+file(GLOB_RECURSE SRCS "*.c" "*.cpp")
 
-set(COMPONENT_REQUIRES
-        )
-set(COMPONENT_PRIV_REQUIRES
+file(GLOB_RECURSE HDRS "*.h")
+
+idf_component_register(
+    SRCS ${SRCS} ${HDRS}
+    INCLUDE_DIRS .
+    REQUIRES
+        driver
         nvs_flash
         console
-        )
-
-
-register_component()
+)

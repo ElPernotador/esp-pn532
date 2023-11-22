@@ -1,12 +1,11 @@
-# How to use in example-esp
+# PN532 i2c esp idf 5.1 module
 
-In the [example-esp](https://github.com/ubirch/example-esp32/tree/NFC)
+`Tested only into ESP32 S3`
+
+# How to use as module
+
 project, go to the branch NFC and refresh the submodules, by using
 ```bash
+git submodule add -f https://github.com/ElPernotador/esp-pn532.git components/esp-pn532 
 git submodule update --init --recursive
 ```
-
-The modules will be included in the console, by the definition in the [CmakeLists.txt](https://github.com/ubirch/example-esp32/blob/NFC/CMakeLists.txt#L26)
-
-## esp-pn532
-Port of the Adafruit PN532 Library for Arduino to ESP32
