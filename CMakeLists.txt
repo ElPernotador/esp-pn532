@@ -1,4 +1,4 @@
-file(GLOB_RECURSE SRCS "*.c" "*.cpp")
+file(GLOB_RECURSE SRCS "PN532.c" "*.c" "*.cpp")
 
 file(GLOB_RECURSE HDRS "*.h")
 

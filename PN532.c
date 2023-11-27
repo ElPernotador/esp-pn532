@@ -1,7 +1,7 @@
 /**************************************************************************/
 /*!
  @file     PN532.c
- @author   Luca Faccin
+ @author   Pablo Baratto
  @license  BSD (see license.txt)
 
  This is a port of the Adafruit PN532 Driver for the ESP32 using only the I2C Bus
@@ -9,6 +9,7 @@
 
  @section  HISTORY
  v 1.0		Basic port of the v 2.1 of the Adafruit PN532 Driver
+ v 1.1		Added ESP32S3 compatibility
  */
 /**************************************************************************/
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
@@ -45,7 +46,7 @@ static QueueHandle_t IRQQueue = NULL;
 // #define PN532DEBUG
 // #define MIFAREDEBUG
 // #define IRQDEBUG
-// #define ENABLE_IRQ_ISR
+#define ENABLE_IRQ_ISR
 
 #define PN532_PACKBUFFSIZ 64
 uint8_t pn532_packetbuffer[PN532_PACKBUFFSIZ];
@@ -211,7 +212,7 @@ bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_po
   // disable interrupt
 #ifdef ENABLE_IRQ_ISR
 
-  io_conf.intr_type = GPIO_PIN_INTR_NEGEDGE;
+  io_conf.intr_type = GPIO_INTR_NEGEDGE;
 #else
   io_conf.intr_type = GPIO_INTR_DISABLE;
 #endif
