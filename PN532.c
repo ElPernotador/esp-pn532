@@ -46,7 +46,8 @@ static QueueHandle_t IRQQueue = NULL;
 // #define PN532DEBUG
 // #define MIFAREDEBUG
 // #define IRQDEBUG
-#define ENABLE_IRQ_ISR
+// #define ENABLE_IRQ_ISR
+// #define EXTERNAL_I2C_ENABLE // Uncomment this line if you are using an external I2C driver
 
 #define PN532_PACKBUFFSIZ 64
 uint8_t pn532_packetbuffer[PN532_PACKBUFFSIZ];
@@ -244,6 +245,7 @@ bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_po
   gpio_isr_handler_add(IRQ_PIN, IRQHandler, (void*)IRQ_PIN);
 #endif
 
+#ifndef EXTERNAL_I2C_ENABLE
   i2c_config_t conf = {
       .mode = I2C_MODE_MASTER,
       .sda_io_num = SDA_PIN,
@@ -263,6 +265,7 @@ bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_po
 
   if (i2c_set_timeout(PN532_I2C_PORT, ESP32S3_40MH_TIMEOUT) != ESP_OK)
     return false;
+#endif
 
   return true;
 }
@@ -276,6 +279,11 @@ bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_po
  @return true if read success, false otherwise
  */
 /**************************************************************************/
+esp_err_t _i2c_master_read_from_device(uint8_t address, uint8_t* read_buffer, size_t read_size)
+{
+  return i2c_master_read_from_device(PN532_I2C_PORT, address, read_buffer, read_size, 1000 / portTICK_PERIOD_MS);
+}
+
 bool readdata(uint8_t* buff, uint8_t n)
 {
   i2c_cmd_handle_t i2ccmd;
@@ -285,23 +293,11 @@ bool readdata(uint8_t* buff, uint8_t n)
   bzero(buffer, n + 3);
   bzero(buff, n);
 
-  i2ccmd = i2c_cmd_link_create();
-  i2c_master_start(i2ccmd);
-  i2c_master_write_byte(i2ccmd, PN532_I2C_READ_ADDRESS, true);
-  for (uint8_t i = 0; i < (n + 2); i++)
-    i2c_master_read_byte(i2ccmd, &buffer[i], I2C_MASTER_ACK);
-  i2c_master_read_byte(i2ccmd, &buffer[n + 2], I2C_MASTER_LAST_NACK);
-  i2c_master_stop(i2ccmd);
-
-  if (i2c_master_cmd_begin(PN532_I2C_PORT, i2ccmd, I2C_READ_TIMEOUT / portTICK_PERIOD_MS) != ESP_OK)
+  if (_i2c_master_read_from_device(PN532_I2C_READ_ADDRESS >> 1, buffer, n + 3) != ESP_OK)
   {
-    // Reset i2c bus
-    i2c_cmd_link_delete(i2ccmd);
     free(buffer);
     return false;
   };
-
-  i2c_cmd_link_delete(i2ccmd);
 
   memcpy(buff, buffer + 1, n);
   // Start read (n+1 to take into account leading 0x01 with I2C)

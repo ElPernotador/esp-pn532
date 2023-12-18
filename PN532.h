@@ -195,6 +195,9 @@ extern "C"
   // Target command
   bool initiate_as_target_106();
 
+  // Overrridable functions
+  esp_err_t __attribute__((weak)) _i2c_master_read_from_device(uint8_t address, uint8_t* read_buffer, size_t read_size);
+
 #ifdef __cplusplus
 }
 #endif
