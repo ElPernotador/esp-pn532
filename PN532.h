@@ -158,6 +158,9 @@ extern "C"
   // Initialize the I2C the the reset/IRQ pint
   bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_port_t i2c_port_number);
 
+  void powerOffPN532();
+  void powerOnPN532();
+
   // Generic PN532 functions
   bool SAMConfig(void);
   uint32_t getPN532FirmwareVersion(void);

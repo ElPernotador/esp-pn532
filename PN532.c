@@ -47,9 +47,9 @@ static QueueHandle_t IRQQueue = NULL;
 // #define MIFAREDEBUG
 // #define IRQDEBUG
 // #define ENABLE_IRQ_ISR
-// #define EXTERNAL_I2C_ENABLE // Uncomment this line if you are using an external I2C driver
+#define EXTERNAL_I2C_ENABLE // Uncomment this line if you are using an external I2C driver
 
-#define PN532_PACKBUFFSIZ 64
+#define PN532_PACKBUFFSIZ   64
 uint8_t pn532_packetbuffer[PN532_PACKBUFFSIZ];
 uint8_t ACK_PACKET[] = {0x0, 0x0, 0xFF, 0x0, 0xFF, 0x0};
 uint8_t NACK_PACKET[] = {0x0, 0x0, 0xFF, 0xFF, 0x0, 0x0};
@@ -61,17 +61,25 @@ uint8_t NACK_PACKET[] = {0x0, 0x0, 0xFF, 0xFF, 0x0, 0x0};
 // Def only
 bool SAMConfig(void);
 
+void powerOffPN532() { gpio_set_level(RESET_PIN, 0); }
+
+void powerOnPN532()
+{
+  gpio_set_level(RESET_PIN, 1);
+
+  vTaskDelay(10 / portTICK_PERIOD_MS); // Small delay required before taking other actions after power on.
+  //	 See timing diagram on page 209 of the datasheet, section 12.23.
+}
+
 /**
  * Send the reset signal to PN532
  */
 static void resetPN532()
 {
   gpio_set_level(RESET_PIN, 1);
-  gpio_set_level(RESET_PIN, 0);
+  powerOffPN532();
   vTaskDelay(400 / portTICK_PERIOD_MS);
-  gpio_set_level(RESET_PIN, 1);
-  vTaskDelay(10 / portTICK_PERIOD_MS); // Small delay required before taking other actions after reset.
-  //	 See timing diagram on page 209 of the datasheet, section 12.23.
+  powerOnPN532();
 }
 
 /**************************************************************************/
@@ -192,42 +200,35 @@ bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_po
   uint64_t pintBitMask = ((1ULL) << RESET_PIN);
 
   // initialize the PIN
+
   // Lets configure GPIO PIN for Reset
   gpio_config_t io_conf;
-  // disable interrupt
-  io_conf.intr_type = GPIO_INTR_DISABLE;
-  // set as output mode
-  io_conf.mode = GPIO_MODE_OUTPUT;
-  // bit mask of the pins that you want to set,e.g.GPIO18/19
-  io_conf.pin_bit_mask = pintBitMask;
-  // disable pull-down mode
-  io_conf.pull_down_en = 0;
-  // enable pull-up mode
-  io_conf.pull_up_en = 1;
-  // configure GPIO with the given settings
-  if (gpio_config(&io_conf) != ESP_OK)
+  io_conf.intr_type = GPIO_INTR_DISABLE; // disable interrupt
+  io_conf.mode = GPIO_MODE_OUTPUT;       // set as output mode
+  io_conf.pin_bit_mask = pintBitMask;    // bit mask of the pins that you want to set,e.g.GPIO18/19
+  io_conf.pull_down_en = 0;              // disable pull-down mode
+  io_conf.pull_up_en = 1;                // enable pull-up mode
+
+  if (gpio_config(&io_conf) != ESP_OK) // configure GPIO with the given settings
     return false;
 
   pintBitMask = ((1ULL) << IRQ_PIN);
+
   // Lets configure GPIO PIN for IRQ
+
   // disable interrupt
 #ifdef ENABLE_IRQ_ISR
-
   io_conf.intr_type = GPIO_INTR_NEGEDGE;
 #else
   io_conf.intr_type = GPIO_INTR_DISABLE;
 #endif
 
-  // set as output mode
-  io_conf.mode = GPIO_MODE_INPUT;
-  // bit mask of the pins that you want to set,e.g.GPIO18/19
-  io_conf.pin_bit_mask = pintBitMask;
-  // disable pull-down mode
-  io_conf.pull_down_en = 0;
-  // enable pull-up mode
-  io_conf.pull_up_en = 1;
-  // configure GPIO with the given settings
-  if (gpio_config(&io_conf) != ESP_OK)
+  io_conf.mode = GPIO_MODE_INPUT;     // set as output mode
+  io_conf.pin_bit_mask = pintBitMask; // bit mask of the pins that you want to set,e.g.GPIO18/19
+  io_conf.pull_down_en = 0;           // disable pull-down mode
+  io_conf.pull_up_en = 1;             // enable pull-up mode
+
+  if (gpio_config(&io_conf) != ESP_OK) // configure GPIO with the given settings
     return false;
 
   // Reset the PN532
