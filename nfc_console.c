@@ -55,10 +55,7 @@ static int nfc_execute(int argc, char** argv)
       mifareultralight_ReadPage(page, nfc_buffer);
       ESP_LOGD(TAG, "page %d = %02x%02x%02x%02x\r\n", page, nfc_buffer[3], nfc_buffer[2], nfc_buffer[1], nfc_buffer[0]);
     }
-    else
-    {
-      ESP_LOGD(TAG, " FAILED TO READ\r\n");
-    }
+    else { ESP_LOGD(TAG, " FAILED TO READ\r\n"); }
   }
   else if (read_write == 'w')
   {
@@ -66,12 +63,14 @@ static int nfc_execute(int argc, char** argv)
     if (readPassiveTargetID(0, uid, &uidLength, 30000))
     {
       ESP_LOGD(TAG, "UID = %02x %02x %02x %02x %02x %02x %02x\r\n", uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
-      mifareultralight_WritePage(page, &value);
+
+      nfc_buffer[0] = (value >> 24) & 0xFF;
+      nfc_buffer[1] = (value >> 16) & 0xFF;
+      nfc_buffer[2] = (value >> 8) & 0xFF;
+      nfc_buffer[3] = value & 0xFF;
+      mifareultralight_WritePage(page, nfc_buffer);
     }
-    else
-    {
-      ESP_LOGD(TAG, " FAILED TO WRITE\r\n");
-    }
+    else { ESP_LOGD(TAG, " FAILED TO WRITE\r\n"); }
   }
 
   return 0;
@@ -87,5 +86,5 @@ void register_nfc()
   const esp_console_cmd_t nfc_cmd = {
       .command = "nfc", .help = "read or write a specific page of the NFC tag", .hint = NULL, .func = &nfc_execute, .argtable = &nfc_args};
 
-  ESP_ERROR_CHECK(esp_console_cmd_register(&nfc_cmd));
+  ESP_ERROR_CHECK_WITHOUT_ABORT(esp_console_cmd_register(&nfc_cmd));
 }
