@@ -1,0 +1,48 @@
+# Kconfig for PN532 component
+
+menu "PN532 NFC Component Configuration"
+    visible if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S3 # Adjust if other targets are supported
+
+    config PN532_ENABLED
+        bool "Enable PN532 NFC Component"
+        default y
+        help
+            Enable this option to include the PN532 NFC component in the build.
+
+    if PN532_ENABLED
+
+        config PN532_DEBUG_ENABLE
+            bool "Enable PN532 Debug Output"
+            default n
+            help
+                Enable debug log messages specifically from the PN532 driver.
+                This will output detailed information during PN532 operations.
+
+        config PN532_MIFARE_DEBUG_ENABLE
+            bool "Enable Mifare Debug Output"
+            default n
+            help
+                Enable debug log messages specifically for Mifare card operations.
+
+        config PN532_IRQ_DEBUG_ENABLE
+            bool "Enable IRQ Debug Output"
+            default n
+            help
+                Enable debug log messages for IRQ handling.
+        
+        config PN532_ENABLE_IRQ_ISR
+            bool "Enable IRQ ISR handling"
+            default y
+            help
+                Enable interrupt service routine for IRQ pin. If disabled, polling will be used.
+
+        config PN532_EXTERNAL_I2C_DRIVER
+            bool "Use External I2C Driver"
+            default n  # Assuming internal driver is default
+            help
+                Enable this option if you are providing an external I2C driver implementation
+                and do not want this component to initialize the I2C bus.
+                If enabled, you must ensure I2C is configured before using this component.
+
+    endif # PN532_ENABLED
+endmenu

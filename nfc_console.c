@@ -48,29 +48,46 @@ static int nfc_execute(int argc, char** argv)
 
   if (read_write == 'r')
   {
-    ESP_LOGD(TAG, "reading page %d\r\n", page);
+    ESP_LOGI(TAG, "Attempting to read page %d...", page);
     if (readPassiveTargetID(0, uid, &uidLength, 30000))
     {
-      ESP_LOGD(TAG, "UID = %02x %02x %02x %02x %02x %02x %02x\r\n", uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
-      mifareultralight_ReadPage(page, nfc_buffer);
-      ESP_LOGD(TAG, "page %d = %02x%02x%02x%02x\r\n", page, nfc_buffer[3], nfc_buffer[2], nfc_buffer[1], nfc_buffer[0]);
+      ESP_LOGI(TAG, "Card UID: %02x %02x %02x %02x %02x %02x %02x", uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
+      if (mifareultralight_ReadPage(page, nfc_buffer) == 0)
+      {
+        ESP_LOGE(TAG, "Failed to read page %d", page);
+        return 1; // Indicate error
+      }
+      ESP_LOGI(TAG, "Page %d data: %02x%02x%02x%02x", page, nfc_buffer[3], nfc_buffer[2], nfc_buffer[1], nfc_buffer[0]);
     }
-    else { ESP_LOGD(TAG, " FAILED TO READ\r\n"); }
+    else
+    {
+      ESP_LOGE(TAG, "Failed to detect card.");
+      return 1;
+    }
   }
   else if (read_write == 'w')
   {
-    ESP_LOGD(TAG, "writing page %d value %08lu \r\n", page, value);
+    ESP_LOGI(TAG, "Attempting to write to page %d value 0x%08lx...", page, value);
     if (readPassiveTargetID(0, uid, &uidLength, 30000))
     {
-      ESP_LOGD(TAG, "UID = %02x %02x %02x %02x %02x %02x %02x\r\n", uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
+      ESP_LOGI(TAG, "Card UID: %02x %02x %02x %02x %02x %02x %02x", uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
 
       nfc_buffer[0] = (value >> 24) & 0xFF;
       nfc_buffer[1] = (value >> 16) & 0xFF;
       nfc_buffer[2] = (value >> 8) & 0xFF;
       nfc_buffer[3] = value & 0xFF;
-      mifareultralight_WritePage(page, nfc_buffer);
+      if (mifareultralight_WritePage(page, nfc_buffer) == 0)
+      {
+        ESP_LOGE(TAG, "Failed to write to page %d", page);
+        return 1; // Indicate error
+      }
+      ESP_LOGI(TAG, "Successfully wrote to page %d", page); // Added success message
     }
-    else { ESP_LOGD(TAG, " FAILED TO WRITE\r\n"); }
+    else
+    {
+      ESP_LOGE(TAG, "Failed to detect card for writing.");
+      return 1;
+    }
   }
 
   return 0;

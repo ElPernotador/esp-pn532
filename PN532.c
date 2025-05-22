@@ -14,6 +14,7 @@
 /**************************************************************************/
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 
+#include "sdkconfig.h" // Added for Kconfig integration
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -43,11 +44,12 @@ uint8_t _inListedTag; // Tg number of inlisted tag.
 #define ESP_INTR_FLAG_DEFAULT 0
 static QueueHandle_t IRQQueue = NULL;
 // Uncomment these lines to enable debug output for PN532(SPI) and/or MIFARE related code
+// Kconfig flags will be used instead of these defines
 // #define PN532DEBUG
 // #define MIFAREDEBUG
 // #define IRQDEBUG
 // #define ENABLE_IRQ_ISR
-#define EXTERNAL_I2C_ENABLE // Uncomment this line if you are using an external I2C driver
+// #define EXTERNAL_I2C_ENABLE // Uncomment this line if you are using an external I2C driver
 
 #define PN532_PACKBUFFSIZ   64
 uint8_t pn532_packetbuffer[PN532_PACKBUFFSIZ];
@@ -128,7 +130,7 @@ void writecommand(uint8_t* cmd, uint8_t cmdlen)
   for (i = 1; i < cmdlen + 9; i++) i2c_master_write_byte(i2ccmd, command[i], true);
   i2c_master_stop(i2ccmd);
 
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
   ESP_LOGD(TAG, "%s Sending :", __func__);
   esp_log_buffer_hex(TAG, command, cmdlen + 9);
 #endif
@@ -208,11 +210,11 @@ bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_po
   // Lets configure GPIO PIN for IRQ
 
   // disable interrupt
-#ifdef ENABLE_IRQ_ISR
+#if CONFIG_PN532_ENABLE_IRQ_ISR
   io_conf.intr_type = GPIO_INTR_NEGEDGE;
 #else
   io_conf.intr_type = GPIO_INTR_DISABLE;
-#endif
+#endif // CONFIG_PN532_ENABLE_IRQ_ISR
 
   io_conf.mode = GPIO_MODE_INPUT;     // set as output mode
   io_conf.pin_bit_mask = pintBitMask; // bit mask of the pins that you want to set,e.g.GPIO18/19
@@ -225,7 +227,7 @@ bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_po
   // Reset the PN532
   resetPN532();
 
-#ifdef ENABLE_IRQ_ISR
+#if CONFIG_PN532_ENABLE_IRQ_ISR
   if (IRQQueue != NULL) vQueueDelete(IRQQueue);
   // create a queue to handle gpio event from isr
   IRQQueue = xQueueCreate(1, sizeof(uint32_t));
@@ -234,9 +236,9 @@ bool init_PN532_I2C(uint8_t sda, uint8_t scl, uint8_t reset, uint8_t irq, i2c_po
   gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
   // hook isr handler for specific gpio pin
   gpio_isr_handler_add(IRQ_PIN, IRQHandler, (void*)IRQ_PIN);
-#endif
+#endif // CONFIG_PN532_ENABLE_IRQ_ISR
 
-#ifndef EXTERNAL_I2C_ENABLE
+#ifndef CONFIG_PN532_EXTERNAL_I2C_DRIVER
   i2c_config_t conf = {
       .mode = I2C_MODE_MASTER,
       .sda_io_num = SDA_PIN,
@@ -289,7 +291,7 @@ bool readdata(uint8_t* buff, uint8_t n)
 
   memcpy(buff, buffer + 1, n);
   // Start read (n+1 to take into account leading 0x01 with I2C)
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
   ESP_LOGD(TAG, "Reading: ");
   esp_log_buffer_hex(TAG, buffer, n + 3);
 #endif
@@ -325,7 +327,7 @@ bool isready()
 {
   // I2C check if status is ready by IRQ line being pulled low.
   uint8_t x = gpio_get_level(IRQ_PIN);
-#ifdef IRQDEBUG
+#ifdef CONFIG_PN532_IRQ_DEBUG_ENABLE
   ESP_LOGI(TAG, "IRQ: %d", x);
 #endif
   return (x == 0);
@@ -341,7 +343,7 @@ bool isready()
 /**************************************************************************/
 bool waitready(uint16_t timeout)
 {
-#ifdef ENABLE_IRQ_ISR
+#if CONFIG_PN532_ENABLE_IRQ_ISR
   // Clean the ques
   xQueueReset(IRQQueue);
 
@@ -364,7 +366,7 @@ bool waitready(uint16_t timeout)
       timer += 10;
       if (timer > timeout)
       {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
         ESP_LOGE(TAG, "Waitready TIMEOUT after %d ms!", timeout);
 #endif
         return false;
@@ -373,7 +375,7 @@ bool waitready(uint16_t timeout)
     vTaskDelay(10 / portTICK_PERIOD_MS);
   }
   return true;
-#endif
+#endif // CONFIG_PN532_ENABLE_IRQ_ISR
 }
 
 /**************************************************************************/
@@ -397,7 +399,7 @@ bool sendCommandCheckAck(uint8_t* cmd, uint8_t cmdlen, uint16_t timeout)
   // Wait for chip to say its ready!
   if (!waitready(timeout))
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGE(TAG, "Timeout");
 #endif
     return false;
@@ -406,7 +408,7 @@ bool sendCommandCheckAck(uint8_t* cmd, uint8_t cmdlen, uint16_t timeout)
   // read acknowledgement
   if (!readack())
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "No ACK frame received! Try again");
 #endif
     return false;
@@ -436,7 +438,7 @@ uint32_t getPN532FirmwareVersion(void)
   // check some basic stuff
   if (0 != strncmp((char*)pn532_packetbuffer, (char*)pn532response_firmwarevers, 6))
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "Firmware does not match!");
 #endif
     return 0;
@@ -485,7 +487,7 @@ bool writeGPIO(uint8_t pinstate)
   pn532_packetbuffer[1] = PN532_GPIO_VALIDATIONBIT | pinstate; // P3 Pins
   pn532_packetbuffer[2] = 0x00;                                // P7 GPIO Pins (not used ... taken by SPI)
 
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
   ESP_LOGD(TAG, "Writing P3 GPIO: 0x%.2X", pn532_packetbuffer[1]);
 #endif
 
@@ -495,7 +497,7 @@ bool writeGPIO(uint8_t pinstate)
   // Read response packet (00 FF PLEN PLENCHECKSUM D5 CMD+1(0x0F) DATACHECKSUM 00)
   readdata(pn532_packetbuffer, 8);
 
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
   ESP_LOGD(TAG,
            "Received: 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X 0x%.2X",
            pn532_packetbuffer[0],
@@ -548,7 +550,7 @@ uint8_t readGPIO(void)
 
   int p3offset = 7;
 
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
   printf("Received: ");
   esp_log_buffer_hex(TAG, pn532_packetbuffer, 11);
   printf("\n");
@@ -570,7 +572,7 @@ uint8_t readGPIO(void)
       ESP_LOGD(TAG, "Using SPI (IO = 0x02)");
       break;
   }
-#endif
+#endif // CONFIG_PN532_DEBUG_ENABLE
 
   return pn532_packetbuffer[p3offset];
 }
@@ -614,7 +616,7 @@ bool setPassiveActivationRetries(uint8_t maxRetries)
   pn532_packetbuffer[3] = 0x01; // MxRtyPSL (default = 0x01)
   pn532_packetbuffer[4] = maxRetries;
 
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Setting MxRtyPassiveActivation to %d", maxRetries);
 #endif
 
@@ -646,18 +648,18 @@ bool readPassiveTargetID(uint8_t cardbaudrate, uint8_t* uid, uint8_t* uidLength,
 
   if (!sendCommandCheckAck(pn532_packetbuffer, 3, I2C_WRITE_TIMEOUT))
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "No card(s) read");
 #endif
     return 0x0; // no cards read
   }
 
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
   ESP_LOGD(TAG, "Waiting for IRQ (indicates card presence)");
 #endif
   if (!waitready(timeout))
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "IRQ Timeout");
 #endif
     return 0x0;
@@ -679,7 +681,7 @@ bool readPassiveTargetID(uint8_t cardbaudrate, uint8_t* uid, uint8_t* uidLength,
    b12             NFCID Length
    b13..NFCIDLen   NFCID                                      */
 
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Found %d tags", pn532_packetbuffer[7]);
 #endif
   if (pn532_packetbuffer[7] != 1) return 0;
@@ -687,24 +689,24 @@ bool readPassiveTargetID(uint8_t cardbaudrate, uint8_t* uid, uint8_t* uidLength,
   uint16_t sens_res = pn532_packetbuffer[9];
   sens_res <<= 8;
   sens_res |= pn532_packetbuffer[10];
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "ATQA: 0x%.2X", sens_res);
   ESP_LOGD(TAG, "SAK: 0x%.2X", pn532_packetbuffer[11]);
 #endif
 
   /* Card appears to be Mifare Classic */
   *uidLength = pn532_packetbuffer[12];
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   //	printf("[%s] UID:", );
 #endif
   for (uint8_t i = 0; i < pn532_packetbuffer[12]; i++)
   {
     uid[i] = pn532_packetbuffer[13 + i];
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     printf(" 0x%.2X", uid[i]);
 #endif
   }
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   printf("\n");
 #endif
 
@@ -725,7 +727,7 @@ bool inDataExchange(uint8_t* send, uint8_t sendLength, uint8_t* response, uint8_
 {
   if (sendLength > PN532_PACKBUFFSIZ - 2)
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "APDU length too long for packet buffer");
 #endif
     return false;
@@ -738,7 +740,7 @@ bool inDataExchange(uint8_t* send, uint8_t sendLength, uint8_t* response, uint8_
 
   if (!sendCommandCheckAck(pn532_packetbuffer, sendLength + 2, I2C_WRITE_TIMEOUT))
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "Could not send APDU");
 #endif
     return false;
@@ -746,7 +748,7 @@ bool inDataExchange(uint8_t* send, uint8_t sendLength, uint8_t* response, uint8_
 
   if (!waitready(1000))
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "Response never received for APDU...");
 #endif
     return false;
@@ -759,7 +761,7 @@ bool inDataExchange(uint8_t* send, uint8_t sendLength, uint8_t* response, uint8_
     uint8_t length = pn532_packetbuffer[3];
     if (pn532_packetbuffer[4] != (uint8_t)(~length + 1))
     {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
       ESP_LOGD(TAG, "Length check invalid 0x%.2X 0x%.2X", length, (~length) + 1);
 
 #endif
@@ -769,7 +771,7 @@ bool inDataExchange(uint8_t* send, uint8_t sendLength, uint8_t* response, uint8_
     {
       if ((pn532_packetbuffer[7] & 0x3f) != 0)
       {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
         ESP_LOGD(TAG, "Status code indicates an error");
 #endif
         return false;
@@ -809,13 +811,13 @@ bool inListPassiveTarget()
   pn532_packetbuffer[1] = 1;
   pn532_packetbuffer[2] = 0;
 
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
   ESP_LOGD(TAG, "About to inList passive target");
 #endif
 
   if (!sendCommandCheckAck(pn532_packetbuffer, 3, I2C_WRITE_TIMEOUT))
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "Could not send inlist message");
 #endif
     return false;
@@ -830,7 +832,7 @@ bool inListPassiveTarget()
     uint8_t length = pn532_packetbuffer[3];
     if (pn532_packetbuffer[4] != (uint8_t)(~length + 1))
     {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
       ESP_LOGD(TAG, "Length check invalid 0x%.2X 0x%.2X", length, (~length) + 1);
 
 #endif
@@ -840,7 +842,7 @@ bool inListPassiveTarget()
     {
       if (pn532_packetbuffer[7] != 1)
       {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
         ESP_LOGD(TAG, "Unhandled number of targets inlisted");
 #endif
         ESP_LOGI(TAG, "Number of tags inlisted: %d", pn532_packetbuffer[7]);
@@ -854,7 +856,7 @@ bool inListPassiveTarget()
     }
     else
     {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
       ESP_LOGD(TAG, "Unexpected response to inlist passive host");
 #endif
       return false;
@@ -862,7 +864,7 @@ bool inListPassiveTarget()
   }
   else
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "Preamble missing");
 #endif
     return false;
@@ -930,7 +932,7 @@ uint8_t mifareclassic_AuthenticateBlock(uint8_t* uid, uint8_t uidLen, uint32_t b
   memcpy(_uid, uid, uidLen);
   _uidLen = uidLen;
 
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Trying to authenticate card ");
   esp_log_buffer_hex(TAG, _uid, _uidLen);
   ESP_LOGD(TAG, "Using authentication KEY %c :", keyNumber ? 'B' : 'A');
@@ -955,7 +957,7 @@ uint8_t mifareclassic_AuthenticateBlock(uint8_t* uid, uint8_t uidLen, uint32_t b
   // Mifare auth error is technically byte 7: 0x14 but anything other and 0x00 is not good
   if (pn532_packetbuffer[7] != 0x00)
   {
-#ifdef PN532DEBUG
+#ifdef CONFIG_PN532_DEBUG_ENABLE
     ESP_LOGD(TAG, "Authentification failed: ");
     esp_log_buffer_hex(TAG, pn532_packetbuffer, 12);
 #endif
@@ -980,7 +982,7 @@ uint8_t mifareclassic_AuthenticateBlock(uint8_t* uid, uint8_t uidLen, uint32_t b
 /**************************************************************************/
 uint8_t mifareclassic_ReadDataBlock(uint8_t blockNumber, uint8_t* data)
 {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Trying to read 16 bytes from block %d", blockNumber);
 #endif
 
@@ -993,7 +995,7 @@ uint8_t mifareclassic_ReadDataBlock(uint8_t blockNumber, uint8_t* data)
   /* Send the command */
   if (!sendCommandCheckAck(pn532_packetbuffer, 4, I2C_WRITE_TIMEOUT))
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Failed to receive ACK for read command");
 #endif
     return 0;
@@ -1005,7 +1007,7 @@ uint8_t mifareclassic_ReadDataBlock(uint8_t blockNumber, uint8_t* data)
   /* If byte 8 isn't 0x00 we probably have an error */
   if (pn532_packetbuffer[7] != 0x00)
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Unexpected response");
     esp_log_buffer_hex(TAG, pn532_packetbuffer, 26);
 #endif
@@ -1017,7 +1019,7 @@ uint8_t mifareclassic_ReadDataBlock(uint8_t blockNumber, uint8_t* data)
   memcpy(data, pn532_packetbuffer + 8, 16);
 
   /* Display data for debug if requested */
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Block %d", blockNumber);
   esp_log_buffer_hex(TAG, data, 16);
 #endif
@@ -1039,9 +1041,8 @@ uint8_t mifareclassic_ReadDataBlock(uint8_t blockNumber, uint8_t* data)
 /**************************************************************************/
 uint8_t mifareclassic_WriteDataBlock(uint8_t blockNumber, uint8_t* data)
 {
-#ifdef MIFAREDEBUG
-  PN532DEBUGPRINT.print(F("Trying to write 16 bytes to block "));
-  PN532DEBUGPRINT.println(blockNumber);
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
+  ESP_LOGD(TAG, "Trying to write 16 bytes to block %d", blockNumber); // Changed to ESP_LOGD
 #endif
 
   /* Prepare the first command */
@@ -1054,7 +1055,7 @@ uint8_t mifareclassic_WriteDataBlock(uint8_t blockNumber, uint8_t* data)
   /* Send the command */
   if (!sendCommandCheckAck(pn532_packetbuffer, 20, I2C_WRITE_TIMEOUT))
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Failed to receive ACK for write command");
 #endif
     return 0;
@@ -1191,13 +1192,13 @@ uint8_t mifareultralight_ReadPage(uint8_t page, uint8_t* buffer)
 {
   if (page >= 64)
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Page value out of range");
 #endif
     return 0;
   }
 
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Reading page %d", page);
 #endif
 
@@ -1210,7 +1211,7 @@ uint8_t mifareultralight_ReadPage(uint8_t page, uint8_t* buffer)
   /* Send the command */
   if (!sendCommandCheckAck(pn532_packetbuffer, 4, I2C_WRITE_TIMEOUT))
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Failed to receive ACK for write command");
 #endif
     return 0;
@@ -1218,7 +1219,7 @@ uint8_t mifareultralight_ReadPage(uint8_t page, uint8_t* buffer)
 
   /* Read the response packet */
   readdata(pn532_packetbuffer, 26);
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Received: ");
   esp_log_buffer_hex(TAG, pn532_packetbuffer, 26);
 #endif
@@ -1235,7 +1236,7 @@ uint8_t mifareultralight_ReadPage(uint8_t page, uint8_t* buffer)
   }
   else
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Unexpected response reading block: ");
     esp_log_buffer_hex(TAG, pn532_packetbuffer, 26);
 #endif
@@ -1243,7 +1244,7 @@ uint8_t mifareultralight_ReadPage(uint8_t page, uint8_t* buffer)
   }
 
   /* Display data for debug if requested */
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Page %d", page);
   esp_log_buffer_hex(TAG, buffer, 4);
 #endif
@@ -1268,14 +1269,14 @@ uint8_t mifareultralight_WritePage(uint8_t page, uint8_t* data)
 {
   if (page >= 64)
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Page value out of range");
 #endif
     // Return Failed Signal
     return 0;
   }
 
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Trying to write 4 byte page %d", page);
 #endif
 
@@ -1289,7 +1290,7 @@ uint8_t mifareultralight_WritePage(uint8_t page, uint8_t* data)
   /* Send the command */
   if (!sendCommandCheckAck(pn532_packetbuffer, 8, I2C_WRITE_TIMEOUT))
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Failed to receive ACK for write command");
 #endif
 
@@ -1327,14 +1328,14 @@ uint8_t ntag2xx_ReadPage(uint8_t page, uint8_t* buffer)
 
   if (page >= 231)
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Page value out of range");
 #endif
     return 0;
   }
 
-#ifdef MIFAREDEBUG
-  ESP_LOGD(TAG, "Reading page %d", page)
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
+  ESP_LOGD(TAG, "Reading page %d", page);
 #endif
 
   /* Prepare the command */
@@ -1346,7 +1347,7 @@ uint8_t ntag2xx_ReadPage(uint8_t page, uint8_t* buffer)
   /* Send the command */
   if (!sendCommandCheckAck(pn532_packetbuffer, 4, I2C_WRITE_TIMEOUT))
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Failed to receive ACK for write command");
 #endif
     return 0;
@@ -1354,7 +1355,7 @@ uint8_t ntag2xx_ReadPage(uint8_t page, uint8_t* buffer)
 
   /* Read the response packet */
   readdata(pn532_packetbuffer, 26);
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Received: ");
   esp_log_buffer_hex(TAG, pn532_packetbuffer, 26);
 #endif
@@ -1371,7 +1372,7 @@ uint8_t ntag2xx_ReadPage(uint8_t page, uint8_t* buffer)
   }
   else
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Unexpected response reading block: ");
     esp_log_buffer_hex(TAG, pn532_packetbuffer, 26);
 #endif
@@ -1379,7 +1380,7 @@ uint8_t ntag2xx_ReadPage(uint8_t page, uint8_t* buffer)
   }
 
   /* Display data for debug if requested */
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Page %d", page);
   esp_log_buffer_hex(TAG, buffer, 4);
 #endif
@@ -1411,14 +1412,14 @@ uint8_t ntag2xx_WritePage(uint8_t page, uint8_t* data)
 
   if ((page < 4) || (page > 225))
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Page value out of range");
 #endif
     // Return Failed Signal
     return 0;
   }
 
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
   ESP_LOGD(TAG, "Trying to write 4 byte page %d", page);
 #endif
 
@@ -1432,7 +1433,7 @@ uint8_t ntag2xx_WritePage(uint8_t page, uint8_t* data)
   /* Send the command */
   if (!sendCommandCheckAck(pn532_packetbuffer, 8, I2C_WRITE_TIMEOUT))
   {
-#ifdef MIFAREDEBUG
+#ifdef CONFIG_PN532_MIFARE_DEBUG_ENABLE
     ESP_LOGD(TAG, "Failed to receive ACK for write command");
 #endif
 

@@ -1,0 +1,8 @@
+## IDF Component Manager Manifest File
+description: ESP-PN532 NFC/RFID component, ESP32-S3 tested with ESP-IDF 5.1+
+url: https://github.com/ElPernotador/esp-pn532
+dependencies:
+  idf/driver: ">=5.1.0"  # Using ">=5.1.0" for broader compatibility up to 5.3
+  idf/nvs_flash: ">=5.1.0"
+  idf/console: ">=5.1.0"
+# version: "0.1.0" # Optional: You can add a version for your component
