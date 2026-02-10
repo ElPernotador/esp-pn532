@@ -66,7 +66,7 @@ static int nfc_execute(int argc, char** argv)
     if (readPassiveTargetID(0, uid, &uidLength, 30000))
     {
       ESP_LOGD(TAG, "UID = %02x %02x %02x %02x %02x %02x %02x\r\n", uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6]);
-      mifareultralight_WritePage(page, &value);
+      mifareultralight_WritePage(page, (uint8_t*)&value);
     }
     else
     {
